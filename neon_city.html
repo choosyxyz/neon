@@ -23,11 +23,35 @@
             font-size: 24px;
             text-shadow: 0 0 10px #0fe, 0 0 20px #0fe, 0 0 30px #0fe;
         }
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            color: #0fe;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            text-shadow: 0 0 5px #0fe;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
     <div class="loading" id="loading">LOADING NEON CITY...</div>
+    <div class="controls" id="controls">
+        Camera Controls:<br>
+        W/S - Move Forward/Back<br>
+        A/D - Move Left/Right<br>
+        Q/E - Move Up/Down<br>
+        Arrow Keys - Rotate Camera<br>
+        Space - Toggle Auto-Rotation<br>
+        R - Reset Camera
+    </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
     <script>
         // Wait for Three.js to load
         window.addEventListener('load', () => {
@@ -68,6 +92,18 @@
                 new THREE.MeshBasicMaterial({ color: 0xff0088, wireframe: true })  // Magenta
             ];
             
+            // Neon text materials
+            const textMaterials = [
+                new THREE.MeshBasicMaterial({ color: 0xff00ff }), // Pink
+                new THREE.MeshBasicMaterial({ color: 0x00ffff }), // Cyan
+                new THREE.MeshBasicMaterial({ color: 0xffff00 }), // Yellow
+                new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // Green
+                new THREE.MeshBasicMaterial({ color: 0xff0088 })  // Magenta
+            ];
+            
+            // Store buildings that will have text
+            const buildingsWithText = [];
+            
             // Create random buildings
             for (let i = 0; i < 100; i++) {
                 const width = Math.random() * 5 + 2;
@@ -97,7 +133,146 @@
                 const core = new THREE.Mesh(coreGeometry, coreMaterial);
                 core.position.set(0, 0, 0);
                 building.add(core);
+                
+                // Select some taller buildings to add text (about 10% of buildings)
+                if (height > 15 && Math.random() < 0.5) {
+                    buildingsWithText.push({
+                        building: building,
+                        width: width,
+                        height: height,
+                        depth: depth
+                    });
+                }
             }
+            
+            // Load font for text
+            const fontLoader = new THREE.FontLoader();
+            fontLoader.load('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_bold.typeface.json', function(font) {
+                // Add "CHOOSY" text to selected buildings
+                buildingsWithText.forEach((buildingData, index) => {
+                    const building = buildingData.building;
+                    const width = buildingData.width;
+                    const height = buildingData.height;
+                    
+                    // Create text geometry - either full "CHOOSY" or individual letters
+                    let textGeometry;
+                    let textContent;
+                    
+                    if (Math.random() < 0.7) {
+                        // Individual letter from "CHOOSY"
+                        const letters = "CHOOSY";
+                        textContent = letters.charAt(Math.floor(Math.random() * letters.length));
+                        textGeometry = new THREE.TextGeometry(textContent, {
+                            font: font,
+                            size: Math.min(width, height) * 0.5,
+                            height: 0.2,
+                            curveSegments: 4,
+                            bevelEnabled: true,
+                            bevelThickness: 0.05,
+                            bevelSize: 0.02,
+                            bevelOffset: 0,
+                            bevelSegments: 3
+                        });
+                    } else {
+                        // Full "CHOOSY" text
+                        textContent = "CHOOSY";
+                        textGeometry = new THREE.TextGeometry(textContent, {
+                            font: font,
+                            size: Math.min(width, height) * 0.2,
+                            height: 0.1,
+                            curveSegments: 4,
+                            bevelEnabled: true,
+                            bevelThickness: 0.02,
+                            bevelSize: 0.01,
+                            bevelOffset: 0,
+                            bevelSegments: 2
+                        });
+                    }
+                    
+                    // Center text geometry
+                    textGeometry.computeBoundingBox();
+                    const textWidth = textGeometry.boundingBox.max.x - textGeometry.boundingBox.min.x;
+                    textGeometry.translate(-textWidth / 2, 0, 0);
+                    
+                    // Create text mesh with neon material
+                    const textMaterial = textMaterials[Math.floor(Math.random() * textMaterials.length)];
+                    const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+                    
+                    // Position text on building
+                    const sides = ['front', 'back', 'left', 'right'];
+                    const side = sides[Math.floor(Math.random() * sides.length)];
+                    
+                    switch(side) {
+                        case 'front':
+                            textMesh.position.set(0, height * 0.3, buildingData.depth / 2 + 0.1);
+                            break;
+                        case 'back':
+                            textMesh.position.set(0, height * 0.3, -buildingData.depth / 2 - 0.1);
+                            textMesh.rotation.y = Math.PI;
+                            break;
+                        case 'left':
+                            textMesh.position.set(-buildingData.width / 2 - 0.1, height * 0.3, 0);
+                            textMesh.rotation.y = Math.PI / 2;
+                            break;
+                        case 'right':
+                            textMesh.position.set(buildingData.width / 2 + 0.1, height * 0.3, 0);
+                            textMesh.rotation.y = -Math.PI / 2;
+                            break;
+                    }
+                    
+                    // Add glow effect to text
+                    const glowMaterial = new THREE.MeshBasicMaterial({
+                        color: textMaterial.color,
+                        transparent: true,
+                        opacity: 0.5
+                    });
+                    
+                    // Create slightly larger version of text for glow effect
+                    let glowGeometry;
+                    if (textContent.length === 1) {
+                        glowGeometry = new THREE.TextGeometry(textContent, {
+                            font: font,
+                            size: Math.min(width, height) * 0.52,
+                            height: 0.2,
+                            curveSegments: 4,
+                            bevelEnabled: true,
+                            bevelThickness: 0.1,
+                            bevelSize: 0.05,
+                            bevelOffset: 0,
+                            bevelSegments: 3
+                        });
+                    } else {
+                        glowGeometry = new THREE.TextGeometry(textContent, {
+                            font: font,
+                            size: Math.min(width, height) * 0.22,
+                            height: 0.1,
+                            curveSegments: 4,
+                            bevelEnabled: true,
+                            bevelThickness: 0.05,
+                            bevelSize: 0.03,
+                            bevelOffset: 0,
+                            bevelSegments: 2
+                        });
+                    }
+                    
+                    // Center glow geometry
+                    glowGeometry.computeBoundingBox();
+                    const glowWidth = glowGeometry.boundingBox.max.x - glowGeometry.boundingBox.min.x;
+                    glowGeometry.translate(-glowWidth / 2, 0, 0);
+                    
+                    const glowMesh = new THREE.Mesh(glowGeometry, glowMaterial);
+                    glowMesh.position.copy(textMesh.position);
+                    glowMesh.rotation.copy(textMesh.rotation);
+                    
+                    // Add text and glow to building
+                    building.add(glowMesh);
+                    building.add(textMesh);
+                    
+                    // Store references for animation
+                    building.userData.textMesh = textMesh;
+                    building.userData.glowMesh = glowMesh;
+                });
+            });
             
             // Add ambient light
             const ambientLight = new THREE.AmbientLight(0x222222);
@@ -115,9 +290,259 @@
                 scene.add(light);
             }
             
+            // Create traffic system
+            const vehicles = new THREE.Group();
+            scene.add(vehicles);
+            
+            // Vehicle creation function
+            function createVehicle(x, z, color) {
+                const vehicleGroup = new THREE.Group();
+                
+                // Vehicle body
+                const bodyGeometry = new THREE.BoxGeometry(1.5, 0.5, 3);
+                const bodyMaterial = new THREE.MeshBasicMaterial({ color: color });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                vehicleGroup.add(body);
+                
+                // Vehicle top
+                const topGeometry = new THREE.BoxGeometry(1.2, 0.4, 1.5);
+                const top = new THREE.Mesh(topGeometry, bodyMaterial);
+                top.position.set(0, 0.45, -0.5);
+                vehicleGroup.add(top);
+                
+                // Headlights
+                const headlightGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+                const headlightMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                
+                const rightHeadlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+                rightHeadlight.position.set(0.5, 0, 1.5);
+                vehicleGroup.add(rightHeadlight);
+                
+                const leftHeadlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+                leftHeadlight.position.set(-0.5, 0, 1.5);
+                vehicleGroup.add(leftHeadlight);
+                
+                // Taillights
+                const taillightGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+                const taillightMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                
+                const rightTaillight = new THREE.Mesh(taillightGeometry, taillightMaterial);
+                rightTaillight.position.set(0.5, 0, -1.5);
+                vehicleGroup.add(rightTaillight);
+                
+                const leftTaillight = new THREE.Mesh(taillightGeometry, taillightMaterial);
+                leftTaillight.position.set(-0.5, 0, -1.5);
+                vehicleGroup.add(leftTaillight);
+                
+                // Add neon underglow
+                const glowGeometry = new THREE.PlaneGeometry(2, 3.5);
+                const glowMaterial = new THREE.MeshBasicMaterial({ 
+                    color: color,
+                    transparent: true,
+                    opacity: 0.5,
+                    side: THREE.DoubleSide
+                });
+                const glow = new THREE.Mesh(glowGeometry, glowMaterial);
+                glow.rotation.x = Math.PI / 2;
+                glow.position.y = -0.3;
+                vehicleGroup.add(glow);
+                
+                // Create trail effect
+                const trailGeometry = new THREE.PlaneGeometry(0.5, 20);
+                const trailMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 0.3,
+                    side: THREE.DoubleSide
+                });
+                const trail = new THREE.Mesh(trailGeometry, trailMaterial);
+                trail.rotation.x = Math.PI / 2;
+                trail.position.set(0, -0.2, -10);
+                vehicleGroup.add(trail);
+                
+                // Set initial position
+                vehicleGroup.position.set(x, 0.5, z);
+                
+                // Add to vehicles group
+                vehicles.add(vehicleGroup);
+                
+                // Return the vehicle with its properties
+                return {
+                    mesh: vehicleGroup,
+                    speed: Math.random() * 0.2 + 0.1,
+                    direction: new THREE.Vector3(1, 0, 0), // Initial direction (X-axis)
+                    trail: trail
+                };
+            }
+            
+            // Create traffic lanes
+            const trafficLanes = [
+                { startX: -50, startZ: -40, endX: 50, endZ: -40 },
+                { startX: -50, startZ: -20, endX: 50, endZ: -20 },
+                { startX: -50, startZ: 0, endX: 50, endZ: 0 },
+                { startX: -50, startZ: 20, endX: 50, endZ: 20 },
+                { startX: -50, startZ: 40, endX: 50, endZ: 40 },
+                { startX: -40, startZ: -50, endX: -40, endZ: 50 },
+                { startX: -20, startZ: -50, endX: -20, endZ: 50 },
+                { startX: 0, startZ: -50, endX: 0, endZ: 50 },
+                { startX: 20, startZ: -50, endX: 20, endZ: 50 },
+                { startX: 40, startZ: -50, endX: 40, endZ: 50 }
+            ];
+            
+            // Create vehicles in each lane
+            const trafficVehicles = [];
+            trafficLanes.forEach(lane => {
+                const isHorizontal = lane.startZ === lane.endZ;
+                const laneLength = isHorizontal ? 
+                    Math.abs(lane.endX - lane.startX) : 
+                    Math.abs(lane.endZ - lane.startZ);
+                
+                // Add 2-5 vehicles per lane
+                const vehicleCount = Math.floor(Math.random() * 4) + 2;
+                
+                for (let i = 0; i < vehicleCount; i++) {
+                    // Position along the lane
+                    const progress = i / vehicleCount;
+                    let x, z;
+                    
+                    if (isHorizontal) {
+                        x = lane.startX + progress * (lane.endX - lane.startX);
+                        z = lane.startZ;
+                    } else {
+                        x = lane.startX;
+                        z = lane.startZ + progress * (lane.endZ - lane.startZ);
+                    }
+                    
+                    // Create vehicle with random neon color
+                    const color = colors[Math.floor(Math.random() * colors.length)];
+                    const vehicle = createVehicle(x, z, color);
+                    
+                    // Set direction based on lane orientation
+                    if (isHorizontal) {
+                        // Alternate direction for adjacent lanes
+                        const direction = (Math.floor(z / 20) % 2 === 0) ? 1 : -1;
+                        vehicle.direction = new THREE.Vector3(direction, 0, 0);
+                        vehicle.mesh.rotation.y = (direction < 0) ? Math.PI : 0;
+                    } else {
+                        // Alternate direction for adjacent lanes
+                        const direction = (Math.floor(x / 20) % 2 === 0) ? 1 : -1;
+                        vehicle.direction = new THREE.Vector3(0, 0, direction);
+                        vehicle.mesh.rotation.y = (direction < 0) ? Math.PI / 2 : -Math.PI / 2;
+                    }
+                    
+                    // Store lane info with vehicle
+                    vehicle.lane = lane;
+                    vehicle.isHorizontal = isHorizontal;
+                    
+                    trafficVehicles.push(vehicle);
+                }
+            });
+            
             // Animation variables
             let time = 0;
             const cameraRadius = 50;
+            
+            // Camera control variables
+            const cameraControls = {
+                autoRotate: true,
+                moveSpeed: 0.5,
+                rotateSpeed: 0.02,
+                keysPressed: {}
+            };
+            
+            // Camera target (what the camera looks at)
+            const cameraTarget = new THREE.Vector3(0, 5, 0);
+            
+            // Handle keyboard controls
+            document.addEventListener('keydown', (event) => {
+                cameraControls.keysPressed[event.key] = true;
+                
+                // Toggle auto-rotation with spacebar
+                if (event.code === 'Space') {
+                    cameraControls.autoRotate = !cameraControls.autoRotate;
+                }
+                
+                // Reset camera with R key
+                if (event.key === 'r' || event.key === 'R') {
+                    camera.position.set(0, 15, 30);
+                    cameraTarget.set(0, 5, 0);
+                    camera.lookAt(cameraTarget);
+                }
+            });
+            
+            document.addEventListener('keyup', (event) => {
+                cameraControls.keysPressed[event.key] = false;
+            });
+            
+            // Function to update camera based on controls
+            function updateCamera() {
+                // Get camera's forward, right, and up vectors
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                
+                // Handle movement (WASD)
+                if (cameraControls.keysPressed['w'] || cameraControls.keysPressed['W']) {
+                    camera.position.addScaledVector(forward, cameraControls.moveSpeed);
+                    cameraTarget.addScaledVector(forward, cameraControls.moveSpeed);
+                }
+                if (cameraControls.keysPressed['s'] || cameraControls.keysPressed['S']) {
+                    camera.position.addScaledVector(forward, -cameraControls.moveSpeed);
+                    cameraTarget.addScaledVector(forward, -cameraControls.moveSpeed);
+                }
+                if (cameraControls.keysPressed['a'] || cameraControls.keysPressed['A']) {
+                    camera.position.addScaledVector(right, -cameraControls.moveSpeed);
+                    cameraTarget.addScaledVector(right, -cameraControls.moveSpeed);
+                }
+                if (cameraControls.keysPressed['d'] || cameraControls.keysPressed['D']) {
+                    camera.position.addScaledVector(right, cameraControls.moveSpeed);
+                    cameraTarget.addScaledVector(right, cameraControls.moveSpeed);
+                }
+                
+                // Handle vertical movement (Q/E)
+                if (cameraControls.keysPressed['q'] || cameraControls.keysPressed['Q']) {
+                    camera.position.y += cameraControls.moveSpeed;
+                    cameraTarget.y += cameraControls.moveSpeed;
+                }
+                if (cameraControls.keysPressed['e'] || cameraControls.keysPressed['E']) {
+                    camera.position.y -= cameraControls.moveSpeed;
+                    cameraTarget.y -= cameraControls.moveSpeed;
+                }
+                
+                // Handle rotation (arrow keys)
+                if (cameraControls.keysPressed['ArrowLeft']) {
+                    // Rotate camera left around the up axis
+                    const rotationMatrix = new THREE.Matrix4().makeRotationY(cameraControls.rotateSpeed);
+                    const cameraDirection = new THREE.Vector3().subVectors(camera.position, cameraTarget);
+                    cameraDirection.applyMatrix4(rotationMatrix);
+                    camera.position.copy(cameraTarget).add(cameraDirection);
+                }
+                if (cameraControls.keysPressed['ArrowRight']) {
+                    // Rotate camera right around the up axis
+                    const rotationMatrix = new THREE.Matrix4().makeRotationY(-cameraControls.rotateSpeed);
+                    const cameraDirection = new THREE.Vector3().subVectors(camera.position, cameraTarget);
+                    cameraDirection.applyMatrix4(rotationMatrix);
+                    camera.position.copy(cameraTarget).add(cameraDirection);
+                }
+                if (cameraControls.keysPressed['ArrowUp']) {
+                    // Rotate camera up
+                    const cameraDirection = new THREE.Vector3().subVectors(camera.position, cameraTarget);
+                    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                    const rotationMatrix = new THREE.Matrix4().makeRotationAxis(right, cameraControls.rotateSpeed);
+                    cameraDirection.applyMatrix4(rotationMatrix);
+                    camera.position.copy(cameraTarget).add(cameraDirection);
+                }
+                if (cameraControls.keysPressed['ArrowDown']) {
+                    // Rotate camera down
+                    const cameraDirection = new THREE.Vector3().subVectors(camera.position, cameraTarget);
+                    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                    const rotationMatrix = new THREE.Matrix4().makeRotationAxis(right, -cameraControls.rotateSpeed);
+                    cameraDirection.applyMatrix4(rotationMatrix);
+                    camera.position.copy(cameraTarget).add(cameraDirection);
+                }
+                
+                // Update camera to look at target
+                camera.lookAt(cameraTarget);
+            }
             
             // Handle window resize
             window.addEventListener('resize', () => {
@@ -130,17 +555,61 @@
             function animate() {
                 requestAnimationFrame(animate);
                 
-                // Rotate camera around the scene
-                time += 0.005;
-                camera.position.x = Math.sin(time) * cameraRadius;
-                camera.position.z = Math.cos(time) * cameraRadius;
-                camera.lookAt(0, 5, 0);
+                // Update camera based on controls or auto-rotation
+                if (cameraControls.autoRotate) {
+                    // Auto-rotate camera around the scene
+                    time += 0.005;
+                    camera.position.x = Math.sin(time) * cameraRadius;
+                    camera.position.z = Math.cos(time) * cameraRadius;
+                    camera.lookAt(0, 5, 0);
+                    cameraTarget.set(0, 5, 0);
+                } else {
+                    // Manual camera control
+                    updateCamera();
+                }
                 
                 // Animate buildings
                 buildings.children.forEach((building, index) => {
                     building.rotation.y += 0.002;
                     building.position.y = (Math.sin(time + index * 0.1) * 0.5) + (building.geometry.parameters.height / 2);
+                    
+                    // Animate text glow if present
+                    if (building.userData.glowMesh) {
+                        building.userData.glowMesh.material.opacity = 0.3 + Math.sin(time * 5 + index) * 0.2;
+                    }
                 });
+                
+                // Animate vehicles
+                trafficVehicles.forEach(vehicle => {
+                    // Move vehicle
+                    vehicle.mesh.position.x += vehicle.direction.x * vehicle.speed;
+                    vehicle.mesh.position.z += vehicle.direction.z * vehicle.speed;
+                    
+                    // Check if vehicle reached the end of its lane
+                    if (vehicle.isHorizontal) {
+                        if ((vehicle.direction.x > 0 && vehicle.mesh.position.x > vehicle.lane.endX) ||
+                            (vehicle.direction.x < 0 && vehicle.mesh.position.x < vehicle.lane.startX)) {
+                            // Reset to the beginning of the lane
+                            vehicle.mesh.position.x = (vehicle.direction.x > 0) ? 
+                                vehicle.lane.startX : vehicle.lane.endX;
+                        }
+                    } else {
+                        if ((vehicle.direction.z > 0 && vehicle.mesh.position.z > vehicle.lane.endZ) ||
+                            (vehicle.direction.z < 0 && vehicle.mesh.position.z < vehicle.lane.startZ)) {
+                            // Reset to the beginning of the lane
+                            vehicle.mesh.position.z = (vehicle.direction.z > 0) ? 
+                                vehicle.lane.startZ : vehicle.lane.endZ;
+                        }
+                    }
+                    
+                    // Make trail flicker
+                    if (vehicle.trail) {
+                        vehicle.trail.material.opacity = 0.2 + Math.sin(time * 10) * 0.1;
+                    }
+                });
+                
+                // Update time for animations
+                time += 0.01;
                 
                 renderer.render(scene, camera);
             }
